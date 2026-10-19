@@ -224,11 +224,13 @@ setTimeout(()=>rej(new Error('timeout')),20000)})}
 async function conn(room){let r=null;
 try{if(room&&window.Peer)r=await peerRoom(room)}catch(e){if(room){alert('Could not connect to the room. Check the code and try again.');host=false;mode='menu';render();return}}
 if(!r)r=local();
-R=r;{const _on=R.on.bind(R);R.on=(t,f)=>_on(t,m=>{if(R===r)f(m)})}R.on('hello',onHello);R.on('act',onAct);R.on('sync',m=>{const d=m.data||{};if(d.to==myPid){seen=1;V=d.v;TE=V.tr!=null?performance.now()+V.tr:0;mode='game';render()}});R.on('lobby',m=>{L=m.data;if(L.ts!=null)TS=L.ts;if(L.rp!=null)RP=L.rp;if(L.rn!=null)RN=L.rn;if(L.p.some(p=>p.pid==myPid))seen=1;if(mode!='game'){mode='lobby';if(!(host&&/^(ts|tn|rs|rn|gs|gn)$/.test((document.activeElement||{}).id)))render()}});R.on('bye',onBye);
+R=r;{const _on=R.on.bind(R);R.on=(t,f)=>_on(t,m=>{if(R===r)f(m)})}R.on('hello',onHello);R.on('act',onAct);R.on('sync',m=>{const d=m.data||{};if(d.to==myPid){seen=1;V=d.v;TE=V.tr!=null?performance.now()+V.tr:0;mode='game';render()}});R.on('lobby',m=>{L=m.data;if(L.ts!=null)TS=L.ts;if(L.rp!=null)RP=L.rp;if(L.rn!=null)RN=L.rn;if(L.p.some(p=>p.pid==myPid))seen=1;if(mode!='game'){mode='lobby';if(!(host&&/^(ts|tn|rs|rn|gs|gn)$/.test((document.activeElement||{}).id)))render()}});R.on('bye',onBye);R.on('deny',m=>{const d=m.data||{};if(d.to!=myPid)return;alert(DENY[d.why]||'Could not join this room.');leaveRoom()});
 R.emit('hello',{n:name});const t=setInterval(()=>{if(seen||host||G||R!==r)return clearInterval(t);R.emit('hello',{n:name})},2500)}
-function onHello(m){if(m.isMe&&m.sameTab)myPid=m.peer;if(!host)return;const n=String((m.data||{}).n||'Player').slice(0,12);
-if(G){const q=G.P.find(x=>x.off&&!x.bot&&x.n==n);if(q&&!G.P.some(x=>x.pid==m.peer)){q.pid=m.peer;q.off=false;lg(q.n+' reconnected');if(G.stall)return startTurn();bc()}return}let p=L.p.find(x=>x.pid==m.peer);
-if(!p){if(L.p.length>=6)return;L.p.push({pid:m.peer,n})}else p.n=n;R.emit('lobby',{code,p:L.p,ts:TS,rp:RP,rn:RN})}
+const DENY={name:'That name is already taken in this room. Go back, choose a different name and join again.',started:'This match has already started. To rejoin, use the exact same username you had before.',full:'This room is full (6 players).'};
+function onHello(m){if(m.isMe&&m.sameTab)myPid=m.peer;if(!host)return;const n=String((m.data||{}).n||'Player').slice(0,12),K=s=>String(s).trim().toLowerCase(),no=why=>R.emit('deny',{to:m.peer,why});
+if(G){if(G.P.some(x=>x.pid==m.peer))return;const q=G.P.find(x=>x.off&&!x.bot&&K(x.n)==K(n));if(q){q.pid=m.peer;q.off=false;lg(q.n+' reconnected');if(G.stall)return startTurn();bc();return}return no(G.P.some(x=>!x.bot&&!x.off&&K(x.n)==K(n))?'name':'started')}
+let p=L.p.find(x=>x.pid==m.peer);if(L.p.some(x=>x!==p&&K(x.n)==K(n)))return no('name');
+if(!p){if(L.p.length>=6)return no('full');L.p.push({pid:m.peer,n})}else p.n=n;R.emit('lobby',{code,p:L.p,ts:TS,rp:RP,rn:RN})}
 const send=(a,p,s)=>R.emit('act',{a,p,s});
 /* ---------- host game engine ---------- */
 const sh=a=>{for(let i=a.length-1;i>0;i--){const j=Math.random()*(i+1)|0;[a[i],a[j]]=[a[j],a[i]]}return a};
@@ -242,17 +244,17 @@ function swap(a,i,b,j){const x=G.P[a].s[i],y=G.P[b].s[j];G.P[a].s[i]=y;G.P[b].s[
 function shuf(p){sh(G.P[p].s);G.P[p].s.forEach(c=>c&&(c.k=false))}
 function put(p,i,c){const o=G.P[p].s[i];G.P[p].s[i]=c;c.k=true;G.P[p].d.push(o);lg(G.P[p].n+' keeps the new card, discards '+lab(o))}
 function startHost(){TS=snap(($('#tn')||{}).value);RP=snapRP(($('#rn')||{}).value);RN=snapRN(($('#gn')||{}).value);NS=+$('#ns').value;const n=Math.max(L.p.length,NS);G={P:[],tot:[],round:1,ts:TS,rp:RP,rn:RN};
-L.p.forEach(p=>G.P.push({n:p.n,bot:0,pid:p.pid}));for(let i=0;G.P.length<n;i++)G.P.push({n:BN[i],bot:1});G.tot=G.P.map(()=>0);deal();bc()}
+L.p.forEach(p=>G.P.push({n:p.n,bot:0,pid:p.pid}));{const used=new Set(G.P.map(p=>p.n.trim().toLowerCase()));let bi=0;while(G.P.length<n){let nm;do{nm=BN[bi++]}while(nm&&used.has(nm.toLowerCase()));if(!nm)nm='Bot '+bi;used.add(nm.toLowerCase());G.P.push({n:nm,bot:1})}}G.tot=G.P.map(()=>0);deal();bc()}
 function deal(){clearTm();const d=G.deck=mk();G.P.forEach(p=>{p.s=[0,1,2,3].map(()=>{const c=d.pop();c.k=false;return c});p.d=[];if(p.bot)sh([0,1,2,3]).slice(0,2).forEach(i=>p.s[i].k=true)});
 Object.assign(G,{cur:(G.round-1)%G.P.length,cabo:-1,left:0,drawn:null,over:false,busy:false,sel:{},rev:{},pk:{},log:[],ph:'peek0',msg:'',x:null,why:''})}
 const vis=(c,i)=>c?(G.over||(G.rev[i]||[]).includes(c.id)?[c.r,c.s]:0):null;
 function view(i){const cur=G.cur;let m=G.msg;if(G.ph=='peek0')m=!G.pk[i]?'Setup: tap 2 of your 4 cards to peek. Positions never change.':G.pk[i]==1?'Memorize them, then hide.':'Waiting for the other players...';else if(G.ph!='over'&&i!=cur)m=G.P[cur].n+' is playing...';
-return{me:i,tm:(G.ts||0)*1000,tr:G.tEnd&&!G.over?Math.max(0,G.tEnd-Date.now()):null,c:cur,h:G.ph,k:G.kind,st:G.step,cb:G.cabo,o:G.over,dn:G.deck.length,m,lg:G.log.slice(-3),d:G.drawn?(i==cur?[G.drawn.r,G.drawn.s]:0):null,sel:G.sel[i]||[],pk:G.pk[i]||0,rd:G.round,rn:G.rn||0,fin:G.final?1:0,tt:G.tot,
+return{me:i,tm:(G.ttot||G.ts||0)*1000,tr:G.tEnd&&!G.over?Math.max(0,G.tEnd-Date.now()):null,c:cur,h:G.ph,k:G.kind,st:G.step,cb:G.cabo,o:G.over,dn:G.deck.length,m,lg:G.log.slice(-3),d:G.drawn?(i==cur?[G.drawn.r,G.drawn.s]:0):null,sel:G.sel[i]||[],pk:G.pk[i]||0,rd:G.round,rn:G.rn||0,fin:G.final?1:0,tt:G.tot,
 p:G.P.map((q,j)=>({n:q.n,s:q.s.map(c=>vis(c,i)),t:q.d.length?[q.d[q.d.length-1].r,q.d[q.d.length-1].s]:null,off:q.off?1:0,x:G.over?G.x[j]:undefined,b:G.over?G.b[j]:undefined}))}}
 function bc(){G.P.forEach((p,i)=>!p.bot&&!p.off&&R.emit('sync',{to:p.pid,v:view(i)}))}
 const prevP=()=>G.P[(G.cur+G.P.length-1)%G.P.length];
 function clearTm(){clearTimeout(G.tm);G.tm=0;G.tEnd=0}
-function startTm(){clearTm();if(!G.ts)return;const id=G.tid,ms=G.ts*1000;G.tEnd=Date.now()+ms;G.tm=setTimeout(()=>timeUp(id),ms)}
+function startTm(){clearTm();if(!G.ts)return;const id=G.tid,ms=G.ts*1000;G.ttot=G.ts;G.tEnd=Date.now()+ms;G.tm=setTimeout(()=>timeUp(id),ms)}
 function timeUp(id){if(!G||G.over||G.busy||G.tid!==id)return;const me=G.P[G.cur];G.tm=0;G.tEnd=0;
 if(G.drawn){const c=G.drawn;me.d.push(c);G.drawn=null;lg(me.n+' ran out of time and discards '+lab(c))}
 else if(G.ph=='start'&&G.deck.length){const c=G.deck.pop();me.d.push(c);lg(me.n+' ran out of time: '+lab(c)+' is pulled and discarded')}
@@ -276,6 +278,8 @@ r+='Lowest this round: '+G.P.filter((_,i)=>x[i]==Math.min(...x)).map(p=>p.n).joi
 if(G.rn&&G.round>=G.rn){G.final=true;const mn=Math.min(...G.P.map((_,i)=>G.tot[i]||0)),w=G.P.filter((_,i)=>(G.tot[i]||0)==mn).map(p=>p.n);r+=' FINAL: '+(w.length>1?'tie between '+w.join(', '):w[0]+' wins the match')+'.'}
 G.msg=r;bc()}
 function onAct(m){if(!host||!G)return;const i=G.P.findIndex(p=>p.pid==m.peer);if(i<0)return;const d=m.data||{};act(i,d.a,+d.p,+d.s)}
+function caboStep(){G.msg=G.cabo<0?'Step 4: call CABO, or end your turn.':G.P[G.cabo].n+' already called CABO, so this is your final turn. End your turn.';
+if(G.ts&&G.cabo<0){const rem=G.tEnd?G.tEnd-Date.now():0,ms=Math.max(rem,Math.min(G.ts,10)*1000),id=G.tid;clearTimeout(G.tm);G.tEnd=Date.now()+ms;G.ttot=ms/1000;G.tm=setTimeout(()=>timeUp(id),ms)}}
 function setDisc(){G.ph='disc';G.sel[G.cur]=[];G.msg='Replace one card, discard several that share a number, or discard the drawn card.'}
 function act(m,a,p,s){const me=G.P[m],sel=()=>G.sel[m]||(G.sel[m]=[]),tg=(q,i)=>{const k=q.indexOf(i);k<0?q.push(i):q.splice(k,1)};
 if(G.ph=='peek0'){if(a=='slot'&&p==m&&!G.pk[m]&&me.s[s]){const q=sel();tg(q,s);if(q.length==2){G.rev[m]=q.map(i=>me.s[i].id);G.pk[m]=1}}
@@ -291,12 +295,12 @@ else if(a=='take'&&ph=='start'&&p==(m+G.P.length-1)%G.P.length&&prevP().d.length
 else if(a=='use'&&ph=='eff'){G.ph='tgt';G.step=0;G.msg={7:'Tap one of your cards.',8:'Tap a card of another player.',9:'First tap one of your cards.',KF:'Tap any card of the player to check.',KC:'First tap one of your cards.',KM:'Tap any card of the player to shuffle.'}[G.kind]}
 else if(a=='skip'&&ph=='eff')setDisc();
 else if(a=='ack'&&ph=='ack'){G.rev={};setDisc()}
-else if(a=='drop'&&ph=='disc'){me.d.push(d);lg(me.n+' discards '+lab(d));G.drawn=null;G.ph='cabo';G.msg='Step 4: call CABO, or end your turn.'}
+else if(a=='drop'&&ph=='disc'){me.d.push(d);lg(me.n+' discards '+lab(d));G.drawn=null;G.ph='cabo';caboStep()}
 else if(a=='conf'&&ph=='disc'&&sel().length){const k=sel();
 if(k.length==1)put(m,k[0],d);
 else if(k.every(i=>me.s[i].v==me.s[k[0]].v)){k.forEach(i=>me.d.push(me.s[i]));me.s[k[0]]=d;k.slice(1).forEach(i=>me.s[i]=null);lg(me.n+' discards '+k.length+' matching cards and keeps '+lab(d))}
 else{me.s.push(d);lg('Not matching! '+me.n+' keeps every card plus the drawn one.')}
-G.drawn=null;G.sel={};G.ph='cabo';G.msg='Step 4: call CABO, or end your turn.'}
+G.drawn=null;G.sel={};G.ph='cabo';caboStep()}
 else if(a=='cabo'&&ph=='cabo'&&G.cabo<0){callCabo(m);return endTurn(true)}
 else if(a=='end'&&ph=='cabo')return endTurn(false);
 bc()}
