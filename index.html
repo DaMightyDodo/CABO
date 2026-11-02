@@ -270,11 +270,21 @@ Leave prompt: LeaveYesButtonClick LeaveNoButtonClick
 Missing files are ignored silently, so the game works with any subset. */
 const SFX_DIR='sounds/',SFX_EXT='.mp3';let SFX_VOL=1,BGM_VOL=1,MUTED=false;
 const _sc={},_sbad={};
-function sfx(n){if(!n||MUTED||!SFX_VOL||_sbad[n])return;try{let a=_sc[n];if(!a){a=_sc[n]=new Audio(SFX_DIR+n+SFX_EXT);a.preload='auto';a.addEventListener('error',()=>{_sbad[n]=1})}
+const SFX_ALL=['StandardButtonClick','HoverButton','PixelIn','PixelOut','StartButtonClick','GameStartClick','CallCaboClick','DiscardCard','SelectCard','DrawCard','TimerEnding','VictorySound','RoundEnd','StartScreen','LeaveYesButtonClick','LeaveNoButtonClick','PlayEffect7','PlayEffect8','PlayEffect9','PlayEffectKingFlame','PlayEffectKingCoin','PlayEffectKingMist','PlayEffectCabo','PlayEffectMatch','PlayEffectMismatch'];
+let _ac=null;const _buf={};
+try{_ac=new(window.AudioContext||window.webkitAudioContext)()}catch(e){}
+function loadSfx(n){if(!_ac||_buf[n]!==undefined)return;_buf[n]=null;
+fetch(SFX_DIR+n+SFX_EXT).then(r=>{if(!r.ok)throw 0;return r.arrayBuffer()}).then(d=>new Promise((ok,no)=>_ac.decodeAudioData(d,ok,no))).then(b=>{_buf[n]=b}).catch(()=>{_buf[n]=false})}
+function preloadAudio(){SFX_ALL.forEach(loadSfx);['LobbyBGM','BattleBGM'].forEach(getBgm)}
+const _bgc={};function getBgm(n){let a=_bgc[n];if(!a){a=_bgc[n]=new Audio(SFX_DIR+n+SFX_EXT);a.preload='auto'}return a}
+function sfx(n){if(!n||MUTED||!SFX_VOL)return;
+if(_ac){const b=_buf[n];if(b===undefined)loadSfx(n);
+if(b){try{if(_ac.state=='suspended')_ac.resume();const s=_ac.createBufferSource(),g=_ac.createGain();s.buffer=b;g.gain.value=SFX_VOL;s.connect(g);g.connect(_ac.destination);s.start(0);return}catch(e){}}}
+if(_sbad[n])return;try{let a=_sc[n];if(!a){a=_sc[n]=new Audio(SFX_DIR+n+SFX_EXT);a.preload='auto';a.addEventListener('error',()=>{_sbad[n]=1})}
 const c=a.cloneNode();c.volume=SFX_VOL;const r=c.play();if(r&&r.catch)r.catch(()=>{})}catch(e){}}
 let _bn='',_ba=null;
 const ONESHOT={RoundEnd:1};let BGM_ON=false;
-function bgm(n){if(n===_bn)return;_bn=n;if(_ba){try{_ba.pause()}catch(e){}_ba=null}if(!n)return;if(ONESHOT[n]){sfx(n);return}try{const a=new Audio(SFX_DIR+n+SFX_EXT);a.loop=true;a.volume=BGM_VOL;a.muted=MUTED;_ba=a;const r=a.play();if(r&&r.catch)r.catch(()=>{})}catch(e){}}
+function bgm(n){if(n===_bn)return;_bn=n;if(_ba){try{_ba.pause()}catch(e){}_ba=null}if(!n)return;if(ONESHOT[n]){sfx(n);return}try{const a=getBgm(n);a.currentTime=0;a.loop=true;a.volume=BGM_VOL;a.muted=MUTED;_ba=a;const r=a.play();if(r&&r.catch)r.catch(()=>{})}catch(e){}}
 ['pointerdown','keydown','click','touchend'].forEach(t=>addEventListener(t,()=>{if(_ba&&_ba.paused&&!_ba.error)_ba.play().catch(()=>{})},true));
 const syncBgm=()=>BGM_ON&&bgm(mode=='game'?(V&&V.o&&V.fin?'VictoryBGM':V&&V.o?'RoundEnd':V&&V.cb>=0?'Battle2BGM':'BattleBGM'):'LobbyBGM');
 const bcSfx=n=>{if(R)R.emit('sfx',{n})};
@@ -899,7 +909,7 @@ $('#st').addEventListener('click',e=>{if(e.target.id=='st')stOpen(false)});
 function stSave(){try{localStorage.setItem('cabo-audio',JSON.stringify({b:BGM_VOL,s:SFX_VOL,m:MUTED}))}catch(e){}}
 function audioUI(){const P=v=>Math.round(v*100);$('#bgmv').value=P(BGM_VOL);$('#bgmp').textContent=P(BGM_VOL)+'%';$('#sfxv').value=P(SFX_VOL);$('#sfxp').textContent=P(SFX_VOL)+'%';$('#mute').checked=MUTED;$('#mutev').textContent=MUTED?'MUTE ON':'MUTE OFF';if(_ba){_ba.volume=BGM_VOL;_ba.muted=MUTED}}
 (function(){try{const o=JSON.parse(localStorage.getItem('cabo-audio')||'{}'),c=v=>Math.min(1,Math.max(0,+v||0));if(o.b!=null)BGM_VOL=c(o.b);if(o.s!=null)SFX_VOL=c(o.s);MUTED=!!o.m}catch(e){}audioUI()})();
-render();hdrPos(0,false);
+render();hdrPos(0,false);preloadAudio();
 /* ---------- START SCREEN ----------
 START_BLINK_MS = how long the text stays on / off per phase (smaller = faster blink)
 START_BLINKS   = how many times it blinks before the menu appears
@@ -909,7 +919,7 @@ const START_BLINK_MS=80,START_BLINKS=8;
 let _started=false;
 function startGame(e){if(_started)return;if(e&&e.type=='keydown'&&(e.ctrlKey||e.metaKey||e.altKey))return;_started=true;
 ['keydown','click'].forEach(t=>removeEventListener(t,startGame,true));
-sfx('StartScreen');const ss=$('#ss'),t=$('#sst');t.style.animation='none';t.style.opacity=1;let n=0;
+if(_ac&&_ac.state=='suspended')_ac.resume();preloadAudio();sfx('StartScreen');const ss=$('#ss'),t=$('#sst');t.style.animation='none';t.style.opacity=1;let n=0;
 const iv=setInterval(()=>{n++;t.style.visibility=n%2?'hidden':'visible';if(n>=START_BLINKS*2){clearInterval(iv);ss.remove();BGM_ON=true;syncBgm();intro();setTimeout(()=>document.documentElement.classList.remove('pre'),2500)}},START_BLINK_MS)}
 ['keydown','click'].forEach(t=>addEventListener(t,startGame,true));
 </script></body></html>
